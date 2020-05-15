@@ -1,0 +1,142 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description:  "Auto-remediate EC2 instances from CVEs found during AWS Inspector Assessments"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: SNS Settings
+      Parameters:
+      - pSNSEmailAddress
+    - Label:
+        default: Lambda Settings
+      Parameters:
+      - pLambdaFunctionsS3BucketName
+      - pLambdaFunctionS3keyPath
+    ParameterLabels:
+      pSNSEmailAddress:
+        default: SNS Subscription Email Address
+      pLambdaFunctionsS3BucketName:
+        default: S3 Bucket with Lambda Function Zip files
+      pLambdaFunctionS3keyPath:
+        default: Path in the S3 Bucket to the Lambda Function zip file.
+
+Parameters:
+  pSNSEmailAddress: #Email address to be subscribed to the new SNS topic
+    Type: String
+    Description: Email address to notify in the case of a violation
+  pLambdaFunctionsS3BucketName:
+    Type: String
+    Description: The name of the bucket used to store the lambda functions
+  pLambdaFunctionS3keyPath:
+    Type: String
+    Description: Path to the Lambda Function zip file.
+
+Resources:
+  rSNSCreateSNSTopic: #SNS Topic Creation and Subscription of Lambda + Email address
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+      - Endpoint: !Ref 'pSNSEmailAddress'
+        Protocol: email
+
+  rSNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !GetAtt 'rLambdaFunction.Arn'
+      Protocol: lambda
+      TopicArn: !Ref 'rSNSCreateSNSTopic'
+    
+  rSNSLambdaPermission: #Allows SNS to Invoke the rLambdaFunction function
+    Type: AWS::Lambda::Permission
+    DependsOn: rLambdaFunction
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt 'rLambdaFunction.Arn'
+      Principal: sns.amazonaws.com
+
+  rLambdaRole: #Lambda Execution Role and Permissions
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-${AWS::Region}-Auto-Remediate-LambdaRole'
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+      - PolicyName: !Sub '${AWS::StackName}-${AWS::Region}-Auto-Remediate-LambdaPolicy'
+        PolicyDocument:
+          Statement:
+          - Action:
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+            Effect: Allow
+            Resource: "arn:aws:logs:*:*:*"
+            Sid: CloudWatchLogsPermissions
+          - Action:
+              - "sns:Publish"
+            Effect: Allow
+            Resource:
+              !Ref rSNSCreateSNSTopic
+            Sid: LambdaFunctionPermissionsforSNSPublish
+          - Action:
+              - 's3:ListBucket'
+              - 's3:ListBucketVersions'
+              - 's3:GetObject'
+              - 's3:GetObjectVersion'
+            Effect: Allow
+            Resource:
+              - !Sub "arn:aws:s3:::${pLambdaFunctionsS3BucketName}*"
+              - !Sub "arn:aws:s3:::${pLambdaFunctionsS3BucketName}*/*"
+            Sid: S3BucketPermissions
+          - Action:
+              - 'ec2:*'
+              - 'sns:*'
+              - 'inspector:*'
+              - 'ssm:*'
+            Effect: Allow
+            Resource:
+              - "*"
+            Sid: ServicePermissions
+
+  rLambdaFunction: #Lambda Function Creation and Code
+    Type: AWS::Lambda::Function
+    DependsOn: rLambdaRole
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-${AWS::Region}-Auto-Remediate-LambdaFunction'
+      Role: !GetAtt rLambdaRole.Arn
+      Description: Checking for new CVE ID in findings from AWS Inspector to take remediation action.
+      Handler: index.lambda_handler
+      Timeout: 600
+      MemorySize: 1024
+      Runtime: python3.6
+      Tags:
+      - Key: Name
+        Value: !Sub Lambda Security Control - ${AWS::StackName}
+      Code:
+        S3Bucket: !Ref pLambdaFunctionsS3BucketName
+        S3Key: !Ref pLambdaFunctionS3keyPath
+
+Outputs:
+  oLambdaFunctionARN:
+    Description: Lambda Function ARN
+    Value: !GetAtt rLambdaFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-LambdaARN
+  oSNSTopicARN:
+    Description: SNS topic ARN
+    Value: !Ref rSNSCreateSNSTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-SNSARN
+  oSNSSubscriber:
+    Description: SNS Subscriber Email Address
+    Value: !Ref pSNSEmailAddress
+    Export:
+      Name: !Sub ${AWS::StackName}-NotificationEmail

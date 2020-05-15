@@ -1,0 +1,18 @@
+[
+  {
+    "ParameterKey": "pSNSEmailAddress",
+    "ParameterValue": "hking@go2group.com"
+  },
+  {
+    "ParameterKey": "pLoggingLevel",
+    "ParameterValue": "INFO"
+  },
+  {
+    "ParameterKey": "pLambdaFunctionsS3BucketName",
+    "ParameterValue": "g2g-security-automation-playground"
+  },
+  {
+    "ParameterKey": "pLambdaFunctionS3keyPath",
+    "ParameterValue": "inspector/lambda.zip"
+  }
+]
