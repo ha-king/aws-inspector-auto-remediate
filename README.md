@@ -1,5 +1,5 @@
 ## Summary
-Amazon Inspector findings to SNS Topic which triggers a subscribed AWS Lambda. The Lambda function parses the findings and takes remediation action on the association target EC2 instance.
+Amazon Inspector findings to SNS Topic which triggers a subscribed AWS Lambda. The Lambda function parses the findings and takes remediation action on the associated target EC2 instance.
 
 ## Deployment
 
