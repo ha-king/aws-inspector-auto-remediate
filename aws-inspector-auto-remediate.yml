@@ -34,6 +34,26 @@ Parameters:
     Description: Path to the Lambda Function zip file.
 
 Resources:
+  rResourceGroup:
+    Type: AWS::Inspector::ResourceGroup
+    Properties: 
+      ResourceGroupTags: 
+        - Key: "inspector"
+          Value: "scan"
+  rAssessmentTarget: 
+    Type: AWS::Inspector::AssessmentTarget
+    Properties: 
+        AssessmentTargetName : "AllInstances"
+        ResourceGroupArn : !Ref rResourceGroup
+  rAssessmentTemplate: 
+    Type: AWS::Inspector::AssessmentTemplate
+    Properties: 
+      AssessmentTargetArn: !Ref rAssessmentTarget
+      AssessmentTemplateName: AssessmentTemplate
+      DurationInSeconds: 600
+      RulesPackageArns: 
+        - arn:aws:inspector:us-west-2:758058086616:rulespackage/0-9hgA516p
+  
   rSNSCreateSNSTopic: #SNS Topic Creation and Subscription of Lambda + Email address
     Type: AWS::SNS::Topic
     Properties:
